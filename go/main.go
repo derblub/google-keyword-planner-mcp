@@ -76,6 +76,8 @@ func main() {
 		cfg.DeveloperToken, cfg.ClientID, cfg.ClientSecret, cfg.RefreshToken, cfg.CustomerID, cfg.LoginCustomerID,
 	)
 
+	client.SetDefaultTargeting(cfg.DefaultLanguage, splitAndTrim(cfg.DefaultGeoTargets))
+
 	srv := newServer(client)
 
 	switch *transport {

@@ -30,6 +30,26 @@ type Client struct {
 	loginCustomerID string
 	baseURL         string
 	tokenSource     oauth2.TokenSource
+	// defaultLanguage and defaultGeoTargets apply to calls that do not set their own.
+	defaultLanguage   string
+	defaultGeoTargets []string
+}
+
+// SetDefaultTargeting sets the language and geo target resource names used by calls
+// that leave them empty. Empty defaults mean no restriction.
+func (c *Client) SetDefaultTargeting(language string, geoTargets []string) {
+	c.defaultLanguage = language
+	c.defaultGeoTargets = geoTargets
+}
+
+func (c *Client) targeting(language string, geoTargets []string) (string, []string) {
+	if language == "" {
+		language = c.defaultLanguage
+	}
+	if len(geoTargets) == 0 {
+		geoTargets = c.defaultGeoTargets
+	}
+	return language, geoTargets
 }
 
 // NewClient creates a Client with the provided OAuth2 credentials.
@@ -96,6 +116,7 @@ func (c *Client) GenerateKeywordIdeas(
 	geoTargetConstants []string,
 	keywordPlanNetwork string,
 ) (*KeywordIdeasResponse, error) {
+	language, geoTargetConstants = c.targeting(language, geoTargetConstants)
 	reqBody := c.buildKeywordIdeasRequest(seedKeywords, seedURL, language, geoTargetConstants, keywordPlanNetwork)
 	endpoint := fmt.Sprintf("%s/customers/%s:generateKeywordIdeas", c.baseURL, c.customerID)
 
@@ -136,6 +157,7 @@ func (c *Client) GetHistoricalMetrics(
 	geoTargetConstants []string,
 	keywordPlanNetwork string,
 ) (*HistoricalMetricsResponse, error) {
+	language, geoTargetConstants = c.targeting(language, geoTargetConstants)
 	reqBody := generateHistoricalMetricsRequest{
 		Keywords:           keywords,
 		Language:           language,
@@ -199,6 +221,7 @@ func (c *Client) GetKeywordForecast(ctx context.Context, req ForecastRequest) (*
 	if len(req.Keywords) == 0 {
 		return nil, fmt.Errorf("at least one keyword is required")
 	}
+	req.Language, req.GeoTargetConstants = c.targeting(req.Language, req.GeoTargetConstants)
 	forecastDays := req.ForecastDays
 	if forecastDays <= 0 {
 		forecastDays = 30
@@ -212,9 +235,10 @@ func (c *Client) GetKeywordForecast(ctx context.Context, req ForecastRequest) (*
 		matchType = "BROAD"
 	}
 
-	// The forecast period must lie in the future; starting tomorrow keeps the
-	// request valid regardless of the account's time zone.
-	start := time.Now().UTC().AddDate(0, 0, 1)
+	// The forecast period must start after today in the account's time zone.
+	// UTC tomorrow is still "today" for accounts east of UTC around midnight,
+	// so start two days out.
+	start := time.Now().UTC().AddDate(0, 0, 2)
 	startDate := start.Format("2006-01-02")
 	endDate := start.AddDate(0, 0, forecastDays-1).Format("2006-01-02")
 

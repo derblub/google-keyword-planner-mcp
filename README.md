@@ -229,6 +229,8 @@ Credentials are resolved in this priority order: **CLI flag > environment variab
 | Refresh token | `--refresh-token` | `GOOGLE_ADS_REFRESH_TOKEN` | Yes | From one-time OAuth2 flow |
 | Customer ID | `--customer-id` | `GOOGLE_ADS_CUSTOMER_ID` | Yes | Sub-account ID with billing (not the manager account) |
 | Login customer ID | `--login-customer-id` | `GOOGLE_ADS_LOGIN_CUSTOMER_ID` | Yes* | Manager/MCC account ID. Required when using a sub-account. |
+| Default language | -- | `GOOGLE_ADS_DEFAULT_LANGUAGE` | No | Go only. Language resource name used when a tool call sets none, e.g. `languageConstants/1001` (German). |
+| Default geo targets | -- | `GOOGLE_ADS_DEFAULT_GEO_TARGETS` | No | Go only. Comma-separated geo target resource names used when a tool call sets none, e.g. `geoTargetConstants/2040` (Austria). |
 
 > \* Required when `GOOGLE_ADS_CUSTOMER_ID` is a managed sub-account (accessed through a manager/MCC account). Can be omitted if your OAuth credentials have direct access to the customer account.
 
