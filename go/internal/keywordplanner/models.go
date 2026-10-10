@@ -80,6 +80,7 @@ type generateKeywordIdeasRequest struct {
 	CustomerID             string                     `json:"customerId,omitempty"`
 	Language               string                     `json:"language,omitempty"`
 	GeoTargetConstants     []string                   `json:"geoTargetConstants,omitempty"`
+	KeywordPlanNetwork     string                     `json:"keywordPlanNetwork,omitempty"`
 	KeywordSeed            *keywordSeed               `json:"keywordSeed,omitempty"`
 	URLSeed                *urlSeed                   `json:"urlSeed,omitempty"`
 	KeywordAndURLSeed      *keywordAndURLSeed         `json:"keywordAndUrlSeed,omitempty"`
@@ -119,6 +120,7 @@ type generateHistoricalMetricsRequest struct {
 	Keywords           []string `json:"keywords"`
 	Language           string   `json:"language,omitempty"`
 	GeoTargetConstants []string `json:"geoTargetConstants,omitempty"`
+	KeywordPlanNetwork string   `json:"keywordPlanNetwork,omitempty"`
 }
 
 // generateHistoricalMetricsResponse mirrors
