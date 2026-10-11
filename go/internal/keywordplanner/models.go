@@ -6,8 +6,21 @@ type KeywordIdea struct {
 	Text        string  `json:"text"`
 	AvgMonthlySearches int64  `json:"avgMonthlySearches"`
 	Competition string  `json:"competition"`
+	CompetitionIndex int32 `json:"competitionIndex,omitempty"`
 	LowTopOfPageBidMicros  int64 `json:"lowTopOfPageBidMicros,omitempty"`
 	HighTopOfPageBidMicros int64 `json:"highTopOfPageBidMicros,omitempty"`
+	MonthlySearchVolumes []MonthlyVolume `json:"monthlySearchVolumes,omitempty"`
+}
+
+// IdeaOptions filters and shapes the ideas returned by GenerateKeywordIdeas.
+// The zero value returns every idea without monthly volumes.
+type IdeaOptions struct {
+	// Limit caps the number of ideas returned; 0 means no cap.
+	Limit int
+	// MinMonthlySearches drops ideas with a lower average monthly search volume.
+	MinMonthlySearches int64
+	// IncludeMonthlyVolumes adds the per-month search volumes to each idea.
+	IncludeMonthlyVolumes bool
 }
 
 // KeywordIdeasResponse is the result of generating keyword ideas.
@@ -16,6 +29,11 @@ type KeywordIdeasResponse struct {
 	URL          string        `json:"url,omitempty"`
 	Ideas        []KeywordIdea `json:"ideas"`
 	Count        int           `json:"count"`
+	// TotalFound is the number of ideas the API returned before filtering and truncation.
+	TotalFound   int           `json:"totalFound"`
+	// Language and GeoTargetConstants echo the targeting the request actually used.
+	Language           string   `json:"language,omitempty"`
+	GeoTargetConstants []string `json:"geoTargetConstants,omitempty"`
 }
 
 // KeywordMetrics holds historical search metrics for a single keyword.
@@ -114,6 +132,7 @@ type keywordIdeaMetrics struct {
 	CompetitionIndex       string `json:"competitionIndex"`
 	LowTopOfPageBidMicros  string `json:"lowTopOfPageBidMicros"`
 	HighTopOfPageBidMicros string `json:"highTopOfPageBidMicros"`
+	MonthlySearchVolumes   []monthlySearchVolume `json:"monthlySearchVolumes"`
 }
 
 type generateHistoricalMetricsRequest struct {
