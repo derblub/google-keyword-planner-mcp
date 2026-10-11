@@ -219,7 +219,8 @@ func TestGetKeywordForecast_ForecastsEachKeywordAndTheCombinedAdGroup(t *testing
 
 	client := keywordplanner.NewTestClient("dev-token", "123", "", srv.URL, srv.Client())
 	result, err := client.GetKeywordForecast(context.Background(), keywordplanner.ForecastRequest{
-		Keywords: []string{"kurs ceramiki", "warsztaty ceramiczne"},
+		Keywords:                []string{"kurs ceramiki", "warsztaty ceramiczne"},
+		IncludeKeywordBreakdown: true,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -234,10 +235,10 @@ func TestGetKeywordForecast_ForecastsEachKeywordAndTheCombinedAdGroup(t *testing
 	if result.Keywords[0].Text != "kurs ceramiki" {
 		t.Errorf("Keywords[0].Text = %q, want %q", result.Keywords[0].Text, "kurs ceramiki")
 	}
-	if result.Keywords[0].CostMicros != 14285916 {
-		t.Errorf("Keywords[0].CostMicros = %d, want 14285916", result.Keywords[0].CostMicros)
+	if result.Keywords[0].CostMicros == nil || *result.Keywords[0].CostMicros != 14285916 {
+		t.Errorf("Keywords[0].CostMicros = %v, want 14285916", result.Keywords[0].CostMicros)
 	}
-	if result.Total.Clicks != 10.5 {
+	if result.Total.Clicks == nil || *result.Total.Clicks != 10.5 {
 		t.Errorf("Total.Clicks = %v, want 10.5", result.Total.Clicks)
 	}
 }

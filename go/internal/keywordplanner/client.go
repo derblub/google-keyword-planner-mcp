@@ -13,13 +13,14 @@ import (
 	"time"
 
 	"golang.org/x/oauth2"
+	"golang.org/x/time/rate"
 )
 
 const (
-	tokenURL    = "https://oauth2.googleapis.com/token"
-	adsAPIBase  = "https://googleads.googleapis.com/v25"
+	tokenURL      = "https://oauth2.googleapis.com/token"
+	adsAPIBase    = "https://googleads.googleapis.com/v25"
 	adsAPIVersion = "v25"
-	httpTimeout = 30 * time.Second
+	httpTimeout   = 30 * time.Second
 )
 
 // Client calls the Google Ads Keyword Planner API.
@@ -33,6 +34,7 @@ type Client struct {
 	// defaultLanguage and defaultGeoTargets apply to calls that do not set their own.
 	defaultLanguage   string
 	defaultGeoTargets []string
+	planningLimiter   interface{ Wait(context.Context) error }
 }
 
 // SetDefaultTargeting sets the language and geo target resource names used by calls
@@ -42,14 +44,36 @@ func (c *Client) SetDefaultTargeting(language string, geoTargets []string) {
 	c.defaultGeoTargets = geoTargets
 }
 
-func (c *Client) targeting(language string, geoTargets []string) (string, []string) {
+func (c *Client) targeting(language string, geoTargets []string) (string, []string, error) {
 	if language == "" {
 		language = c.defaultLanguage
 	}
-	if len(geoTargets) == 0 {
+	if geoTargets == nil {
 		geoTargets = c.defaultGeoTargets
 	}
-	return language, geoTargets
+	if language != "" && strings.TrimSpace(language) == "" {
+		return "", nil, fmt.Errorf("language must not be blank; use 'all' for all languages")
+	}
+	language = strings.TrimSpace(language)
+	if strings.EqualFold(language, "all") {
+		language = ""
+	}
+	targets := make([]string, 0, len(geoTargets))
+	seen := make(map[string]bool)
+	for _, target := range geoTargets {
+		target = strings.TrimSpace(target)
+		if target == "" {
+			return "", nil, fmt.Errorf("geo targets must not be blank; use [] for worldwide targeting")
+		}
+		if !seen[target] {
+			targets = append(targets, target)
+			seen[target] = true
+		}
+	}
+	if len(targets) > 10 {
+		return "", nil, fmt.Errorf("at most 10 geo targets are supported")
+	}
+	return language, targets, nil
 }
 
 // NewClient creates a Client with the provided OAuth2 credentials.
@@ -78,6 +102,7 @@ func NewClientWithBaseURL(developerToken, clientID, clientSecret, refreshToken, 
 		loginCustomerID: loginCustomerID,
 		baseURL:         baseURL,
 		tokenSource:     ts,
+		planningLimiter: rate.NewLimiter(rate.Every(time.Second), 1),
 	}
 }
 
@@ -116,7 +141,10 @@ func (c *Client) GenerateKeywordIdeas(
 	geoTargetConstants []string,
 	keywordPlanNetwork string,
 ) (*KeywordIdeasResponse, error) {
-	language, geoTargetConstants = c.targeting(language, geoTargetConstants)
+	language, geoTargetConstants, err := c.targeting(language, geoTargetConstants)
+	if err != nil {
+		return nil, err
+	}
 	reqBody := c.buildKeywordIdeasRequest(seedKeywords, seedURL, language, geoTargetConstants, keywordPlanNetwork)
 	endpoint := fmt.Sprintf("%s/customers/%s:generateKeywordIdeas", c.baseURL, c.customerID)
 
@@ -157,7 +185,10 @@ func (c *Client) GetHistoricalMetrics(
 	geoTargetConstants []string,
 	keywordPlanNetwork string,
 ) (*HistoricalMetricsResponse, error) {
-	language, geoTargetConstants = c.targeting(language, geoTargetConstants)
+	language, geoTargetConstants, err := c.targeting(language, geoTargetConstants)
+	if err != nil {
+		return nil, err
+	}
 	reqBody := generateHistoricalMetricsRequest{
 		Keywords:           keywords,
 		Language:           language,
@@ -201,13 +232,14 @@ func (c *Client) GetHistoricalMetrics(
 // neither set the API forecasts worldwide traffic across all languages, which
 // bears no resemblance to what a geographically targeted campaign will deliver.
 type ForecastRequest struct {
-	Keywords           []string
-	MatchType          string
-	MaxCPCMicros       int64
-	ForecastDays       int
-	GeoTargetConstants []string
-	Language           string
-	CurrencyCode       string
+	Keywords                []string
+	MatchType               string
+	MaxCPCMicros            int64
+	ForecastDays            int
+	GeoTargetConstants      []string
+	Language                string
+	CurrencyCode            string
+	IncludeKeywordBreakdown bool
 }
 
 // GetKeywordForecast returns projected performance metrics for a set of keywords.
@@ -221,7 +253,11 @@ func (c *Client) GetKeywordForecast(ctx context.Context, req ForecastRequest) (*
 	if len(req.Keywords) == 0 {
 		return nil, fmt.Errorf("at least one keyword is required")
 	}
-	req.Language, req.GeoTargetConstants = c.targeting(req.Language, req.GeoTargetConstants)
+	var err error
+	req.Language, req.GeoTargetConstants, err = c.targeting(req.Language, req.GeoTargetConstants)
+	if err != nil {
+		return nil, err
+	}
 	forecastDays := req.ForecastDays
 	if forecastDays <= 0 {
 		forecastDays = 30
@@ -234,13 +270,18 @@ func (c *Client) GetKeywordForecast(ctx context.Context, req ForecastRequest) (*
 	if matchType == "" {
 		matchType = "BROAD"
 	}
+	if matchType != "BROAD" && matchType != "PHRASE" && matchType != "EXACT" {
+		return nil, fmt.Errorf("match_type must be BROAD, PHRASE or EXACT")
+	}
+	if forecastDays > 364 {
+		return nil, fmt.Errorf("forecast_days must not exceed 364")
+	}
 
 	// The forecast period must start after today in the account's time zone.
 	// UTC tomorrow is still "today" for accounts east of UTC around midnight,
 	// so start two days out.
-	start := time.Now().UTC().AddDate(0, 0, 2)
-	startDate := start.Format("2006-01-02")
-	endDate := start.AddDate(0, 0, forecastDays-1).Format("2006-01-02")
+	period := forecastPeriodFor(time.Now(), forecastDays)
+	startDate, endDate := period.StartDate, period.EndDate
 
 	forecast := func(keywords []string) (KeywordForecastMetrics, error) {
 		infos := make([]forecastKeyword, 0, len(keywords))
@@ -273,23 +314,26 @@ func (c *Client) GetKeywordForecast(ctx context.Context, req ForecastRequest) (*
 		}
 
 		m := raw.CampaignForecastMetrics
+		if m == nil {
+			return KeywordForecastMetrics{}, fmt.Errorf("forecast response is missing campaignForecastMetrics")
+		}
 		return KeywordForecastMetrics{
 			Clicks:           m.Clicks,
-			CostMicros:       parseI64(m.CostMicros),
-			AverageCPCMicros: parseI64(m.AverageCPCMicros),
-			Conversions:      m.Conversions,
-			AverageCPAMicros: parseI64(m.AverageCPAMicros),
+			CostMicros:       m.CostMicros,
+			AverageCPCMicros: m.AverageCPCMicros,
 		}, nil
 	}
 
 	perKeyword := make([]KeywordForecastMetrics, 0, len(req.Keywords))
-	for _, kw := range req.Keywords {
-		metrics, err := forecast([]string{kw})
-		if err != nil {
-			return nil, fmt.Errorf("forecasting %q: %w", kw, err)
+	if req.IncludeKeywordBreakdown {
+		for _, kw := range req.Keywords {
+			metrics, err := forecast([]string{kw})
+			if err != nil {
+				return nil, fmt.Errorf("forecasting %q: %w", kw, err)
+			}
+			metrics.Text = kw
+			perKeyword = append(perKeyword, metrics)
 		}
-		metrics.Text = kw
-		perKeyword = append(perKeyword, metrics)
 	}
 
 	total, err := forecast(req.Keywords)
@@ -306,10 +350,28 @@ func (c *Client) GetKeywordForecast(ctx context.Context, req ForecastRequest) (*
 		EndDate:            endDate,
 		GeoTargetConstants: req.GeoTargetConstants,
 		Language:           req.Language,
+		CurrencyCode:       req.CurrencyCode,
+		MatchType:          matchType,
 	}, nil
 }
 
+func forecastPeriodFor(now time.Time, days int) dateRange {
+	start := now.UTC().AddDate(0, 0, 2)
+	return dateRange{
+		StartDate: start.Format("2006-01-02"),
+		EndDate:   start.AddDate(0, 0, days-1).Format("2006-01-02"),
+	}
+}
+
 func (c *Client) post(ctx context.Context, endpoint string, body, out any) error {
+	if c.planningLimiter != nil &&
+		(strings.HasSuffix(endpoint, ":generateKeywordIdeas") ||
+			strings.HasSuffix(endpoint, ":generateKeywordHistoricalMetrics") ||
+			strings.HasSuffix(endpoint, ":generateKeywordForecastMetrics")) {
+		if err := c.planningLimiter.Wait(ctx); err != nil {
+			return fmt.Errorf("waiting for planning quota: %w", err)
+		}
+	}
 	reqBytes, err := json.Marshal(body)
 	if err != nil {
 		return fmt.Errorf("marshalling request: %w", err)

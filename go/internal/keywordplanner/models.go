@@ -3,11 +3,11 @@ package keywordplanner
 
 // KeywordIdea is a keyword suggestion with historical performance metrics.
 type KeywordIdea struct {
-	Text        string  `json:"text"`
-	AvgMonthlySearches int64  `json:"avgMonthlySearches"`
-	Competition string  `json:"competition"`
-	LowTopOfPageBidMicros  int64 `json:"lowTopOfPageBidMicros,omitempty"`
-	HighTopOfPageBidMicros int64 `json:"highTopOfPageBidMicros,omitempty"`
+	Text                   string `json:"text"`
+	AvgMonthlySearches     int64  `json:"avgMonthlySearches"`
+	Competition            string `json:"competition"`
+	LowTopOfPageBidMicros  int64  `json:"lowTopOfPageBidMicros,omitempty"`
+	HighTopOfPageBidMicros int64  `json:"highTopOfPageBidMicros,omitempty"`
 }
 
 // KeywordIdeasResponse is the result of generating keyword ideas.
@@ -20,19 +20,19 @@ type KeywordIdeasResponse struct {
 
 // KeywordMetrics holds historical search metrics for a single keyword.
 type KeywordMetrics struct {
-	Text               string        `json:"text"`
-	AvgMonthlySearches int64         `json:"avgMonthlySearches"`
-	Competition        string        `json:"competition"`
-	CompetitionIndex   int32         `json:"competitionIndex"`
-	LowTopOfPageBidMicros  int64     `json:"lowTopOfPageBidMicros,omitempty"`
-	HighTopOfPageBidMicros int64     `json:"highTopOfPageBidMicros,omitempty"`
-	MonthlySearchVolumes []MonthlyVolume `json:"monthlySearchVolumes,omitempty"`
+	Text                   string          `json:"text"`
+	AvgMonthlySearches     int64           `json:"avgMonthlySearches"`
+	Competition            string          `json:"competition"`
+	CompetitionIndex       int32           `json:"competitionIndex"`
+	LowTopOfPageBidMicros  int64           `json:"lowTopOfPageBidMicros,omitempty"`
+	HighTopOfPageBidMicros int64           `json:"highTopOfPageBidMicros,omitempty"`
+	MonthlySearchVolumes   []MonthlyVolume `json:"monthlySearchVolumes,omitempty"`
 }
 
 // MonthlyVolume is the search volume for a specific month.
 type MonthlyVolume struct {
-	Year  int32 `json:"year"`
-	Month int32 `json:"month"`
+	Year            int32 `json:"year"`
+	Month           int32 `json:"month"`
 	MonthlySearches int64 `json:"monthlySearches"`
 }
 
@@ -48,12 +48,10 @@ type HistoricalMetricsResponse struct {
 // KeywordForecastMetrics in Google Ads API v24/v25 and are no longer returned
 // by generateKeywordForecastMetrics, so they are not modelled here.
 type KeywordForecastMetrics struct {
-	Text              string  `json:"text,omitempty"`
-	Clicks            float64 `json:"clicks"`
-	CostMicros        int64   `json:"costMicros"`
-	AverageCPCMicros  int64   `json:"averageCpcMicros"`
-	Conversions       float64 `json:"conversions"`
-	AverageCPAMicros  int64   `json:"averageCpaMicros"`
+	Text             string   `json:"text,omitempty"`
+	Clicks           *float64 `json:"clicks,omitempty"`
+	CostMicros       *int64   `json:"costMicros,omitempty"`
+	AverageCPCMicros *int64   `json:"averageCpcMicros,omitempty"`
 }
 
 // ForecastResponse is the result of a keyword forecast request.
@@ -72,18 +70,20 @@ type ForecastResponse struct {
 	EndDate            string                   `json:"endDate"`
 	GeoTargetConstants []string                 `json:"geoTargetConstants,omitempty"`
 	Language           string                   `json:"language,omitempty"`
+	CurrencyCode       string                   `json:"currencyCode,omitempty"`
+	MatchType          string                   `json:"matchType"`
 }
 
 // --- Google Ads API raw request/response types ---
 
 type generateKeywordIdeasRequest struct {
-	CustomerID             string                     `json:"customerId,omitempty"`
-	Language               string                     `json:"language,omitempty"`
-	GeoTargetConstants     []string                   `json:"geoTargetConstants,omitempty"`
-	KeywordPlanNetwork     string                     `json:"keywordPlanNetwork,omitempty"`
-	KeywordSeed            *keywordSeed               `json:"keywordSeed,omitempty"`
-	URLSeed                *urlSeed                   `json:"urlSeed,omitempty"`
-	KeywordAndURLSeed      *keywordAndURLSeed         `json:"keywordAndUrlSeed,omitempty"`
+	CustomerID         string             `json:"customerId,omitempty"`
+	Language           string             `json:"language,omitempty"`
+	GeoTargetConstants []string           `json:"geoTargetConstants,omitempty"`
+	KeywordPlanNetwork string             `json:"keywordPlanNetwork,omitempty"`
+	KeywordSeed        *keywordSeed       `json:"keywordSeed,omitempty"`
+	URLSeed            *urlSeed           `json:"urlSeed,omitempty"`
+	KeywordAndURLSeed  *keywordAndURLSeed `json:"keywordAndUrlSeed,omitempty"`
 }
 
 type keywordSeed struct {
@@ -104,7 +104,7 @@ type generateKeywordIdeasResponse struct {
 }
 
 type keywordIdeaResult struct {
-	Text            string              `json:"text"`
+	Text               string             `json:"text"`
 	KeywordIdeaMetrics keywordIdeaMetrics `json:"keywordIdeaMetrics"`
 }
 
@@ -131,7 +131,7 @@ type generateHistoricalMetricsResponse struct {
 }
 
 type historicalMetricsResult struct {
-	Text           string           `json:"text"`
+	Text           string            `json:"text"`
 	KeywordMetrics historicalMetrics `json:"keywordMetrics"`
 }
 
@@ -198,13 +198,11 @@ type forecastKeyword struct {
 // generateForecastMetricsResponse mirrors GenerateKeywordForecastMetricsResponse,
 // which carries a single campaign-level aggregate and no per-keyword breakdown.
 type generateForecastMetricsResponse struct {
-	CampaignForecastMetrics forecastMetricData `json:"campaignForecastMetrics"`
+	CampaignForecastMetrics *forecastMetricData `json:"campaignForecastMetrics"`
 }
 
 type forecastMetricData struct {
-	Clicks           float64 `json:"clicks"`
-	CostMicros       string  `json:"costMicros"`
-	AverageCPCMicros string  `json:"averageCpcMicros"`
-	Conversions      float64 `json:"conversions"`
-	AverageCPAMicros string  `json:"averageCpaMicros"`
+	Clicks           *float64 `json:"clicks"`
+	CostMicros       *int64   `json:"costMicros,string"`
+	AverageCPCMicros *int64   `json:"averageCpcMicros,string"`
 }
